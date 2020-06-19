@@ -19,8 +19,7 @@ class StopWordFilter(Filter):
         with open(filename, encoding='utf-8') as f:
             for stopword in f:
                 self.stopwords.add(stopword)
-            
-        super().__init__()
+        #super().__init__()
 
     
     def is_valid(self, word):
@@ -41,3 +40,7 @@ class WordLengthFilter(Filter):
 class InfrequentWord(Filter):
     #  TODO
     pass
+
+if __name__ == '__main__':
+    lol = Filter()
+    lol.is_valid('test')
