@@ -1,3 +1,8 @@
+# -------------------------------------------------------
+# Assignment 2
+# Written by Andre Parsons-Legault 40031363
+# For COMP 472 Section JX – Summer 2020
+# --------------------------------------------------------
 from abc import ABC, abstractmethod
 
 
