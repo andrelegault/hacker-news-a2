@@ -18,7 +18,7 @@ The third is the worthlength experiment.
 The fourth is the infrequent word filtering experiment.
 """
 if __name__ == '__main__':
-    source_filename = input('Please input the name of the file (leave blank to use hns_2018_2019.csv): ')
+    source_filename = input('Please input the name of the source file (leave blank to use hns_2018_2019.csv): ')
     if not source_filename:
         source_filename = 'hns_2018_2019.csv'
 
