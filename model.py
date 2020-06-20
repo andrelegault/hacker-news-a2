@@ -51,6 +51,18 @@ class Model:
 
 
     def train(self, year=2018):
+        """
+        Training Data has the following structure:
+        {
+            'words': {
+                string : {
+                    'frequencies': { 'total': int, 'story': int, 'poll': int, 'ask_hn': int, 'show_hn': int }
+                    'probabilities': { 'story': int, 'poll': int, 'ask_hn': int, 'show_hn': int }
+                }
+            },
+            'categories': { 'poll': int, 'story': int, 'ask_hn': int, 'show_hn': int },
+        }
+        """
         self.training_data = self.filter_year(year)
         self.training_model['categories'] = { cat: 0 for cat in self.categories }
 
@@ -86,17 +98,16 @@ class Model:
     def test(self, year=2019):
         """Testing."""
         self.testing_data = self.filter_year(year)
-
         self.calc_scores()
-                        
         self.calc_highest_cat()
+        self.calc_performance()
 
     
     def get_categories(self):
         """Get categories for whole data set."""
         return self.data['Post Type'].unique()
 
-    def filter_year(self, year) -> pd.DataFrame:
+    def filter_year(self, year):
         return self.data[self.data.year == year]
 
 
@@ -113,7 +124,7 @@ class Model:
 
 
     def export_vocabulary(self, filename='vocabulary.txt') -> None:
-        with open(filename, 'w+', encoding='utf-8') as f:
+        with open('output/' + filename, 'w+', encoding='utf-8') as f:
             for word in self.training_model['words']:
                 f.write(word + "\n")
 
@@ -129,12 +140,12 @@ class Model:
                 'word2' : { 'total': int, 'category_1': int, 'category_2': int, 'category_3': int, 'category_4': int },
         }
 
-        NOTE: if there are no instances of a post type, the model is not included.
+        NOTE: if there are no instances of a post type, the no output rows will have it.
         For instance, the `post` type is missing as the training data does not include a post of this type.
         """
         words = [x for x in self.training_model['words']]
         sorted_words = sorted(words)
-        with open(filename, 'w+', encoding='utf-8') as f:
+        with open('output/' + filename, 'w+', encoding='utf-8') as f:
             for j in range(len(sorted_words)):
                 sorted_word = sorted_words[j]
                 obj_w = self.training_model['words'][sorted_word]
@@ -148,7 +159,7 @@ class Model:
 
 
     def export_testing_model(self, filename='baseline-result.txt'):
-        with open(filename, 'w+', encoding='utf-8') as f:
+        with open('output/' + filename, 'w+', encoding='utf-8') as f:
             i = 0
             for post_title, obj_post in self.testing_model.items():
                 line = "{0}  {1}  {2}  ".format(i, post_title, obj_post['guess'][0])
@@ -162,4 +173,29 @@ class Model:
 
                 f.write(line)
                 i += 1
+
+    def remove_where(self, bound):
+        if bound == 1:
+            bad_words = { key for key, obj_wo in self.training_model['words'].items() if obj_wo['frequencies']['total'] == 1 }
+        else:
+            bad_words = { key for key, obj_wo in self.training_model['words'].items() if obj_wo['frequencies']['total'] <= bound }
+        for bad_word in bad_words:
+            del self.training_model['words'][bad_word]
+
+    def remove_top(self, percentage):
+        i_bound = round(len(self.training_model['words']) * percentage)
+        by_total_freq = sorted(self.training_model['words'].items(), reverse=True, key=lambda word: word[1]['frequencies']['total'])
+        words_removed = by_total_freq[:i_bound-1]
+        for to_be_removed in words_removed:
+            del self.training_model['words'][to_be_removed[0]]
+
+    def calc_performance(self):
+        A, B = 0, 0
+        for post in self.testing_model.values():
+            if post['answer'] == post['guess'][0]:
+                A += 1
+            else:
+                B += 1
+
+        self.performance = (A / (A + B))
 

@@ -16,10 +16,10 @@ class Filter(ABC):
 class StopWordFilter(Filter):
 
     def __init__(self, filename='stopwords.txt'):
+        self.stopwords = set()
         with open(filename, encoding='utf-8') as f:
-            for stopword in f:
-                self.stopwords.add(stopword)
-        #super().__init__()
+            lst = f.read().splitlines()
+            self.stopwords = set(lst)
 
     
     def is_valid(self, word):
@@ -34,13 +34,10 @@ class WordLengthFilter(Filter):
 
 
     def is_valid(self, word):
-        return min_len <= len(word) <= max_len
+        return self.min_len <= len(word) <= self.max_len
 
 
-class InfrequentWord(Filter):
+class InfrequentWordFilter(Filter):
     #  TODO
     pass
 
-if __name__ == '__main__':
-    lol = Filter()
-    lol.is_valid('test')
