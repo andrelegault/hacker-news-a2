@@ -10,6 +10,15 @@ LOG_BASE = 10
 
 
 class Model:
+    """
+    This class represents a model.
+
+    A model can use a filter that checks every word and removes those that shouldn't be included.
+
+    A model has a training_model, and a testing_model.
+    The former is run before the second via the train(year) method.
+    The second is run via the test(year) method.
+    """
 
     def __init__(self, name, data, word_filter = None):
         self.name = name
@@ -18,6 +27,7 @@ class Model:
 
         self.training_data = {}
         self.testing_data = {}
+        self.removed = set()
 
         self.training_model: Dict[str, dict] = {'words': {}, 'categories': {}}
         self.testing_model: Dict[str, dict] = {}
@@ -25,6 +35,7 @@ class Model:
 
 
     def calc_frequencies(self):
+        """Calculates the frequencies during model training."""
         for i, row in self.training_data.iterrows():
             trimmed_words = self.words_in_title(row['Title'].lower())
             for trimmed_word in trimmed_words:
@@ -42,6 +53,7 @@ class Model:
 
 
     def calc_probabilities(self):
+        """Calculates the smoothed probabilities of the training model."""
         voc_size = len(self.training_model['words'])
         for word in self.training_model['words']:
             for cat, count in self.training_model['categories'].items():
@@ -56,8 +68,8 @@ class Model:
         {
             'words': {
                 string : {
-                    'frequencies': { 'total': int, 'story': int, 'poll': int, 'ask_hn': int, 'show_hn': int }
-                    'probabilities': { 'story': int, 'poll': int, 'ask_hn': int, 'show_hn': int }
+                    'frequencies' : { 'total': int, 'category_1': int, 'category_2': int, 'category_3': int, 'category_4': int },
+                    'probabilities' : { 'category_1': int, 'category_2': int, 'category_3': int, 'category_4': int },
                 }
             },
             'categories': { 'poll': int, 'story': int, 'ask_hn': int, 'show_hn': int },
@@ -72,11 +84,12 @@ class Model:
 
 
     def calc_scores(self):
+        """Calculates scores using smoothed probabilities."""
         cat_scores = {} #  total number of posts of a category divided by total number of posts
         total_posts = len(self.testing_data)
         for category in self.categories:
             count_cat = len(self.testing_data[self.testing_data['Post Type'] == category])
-            cat_scores[category] = count_cat / total_posts
+            cat_scores[category] = log(count_cat / total_posts, LOG_BASE)
 
         for i, row in self.testing_data.iterrows():
             title = row['Title']
@@ -87,16 +100,20 @@ class Model:
                 }
             trimmed_words = self.words_in_title(title.lower())
             for category in self.categories:
-                self.testing_model[title]['probabilities'][category] += cat_scores[category]
                 for trimmed_word in trimmed_words:
+                    total_prob = 0
                     if not self.word_filter or self.word_filter.is_valid(trimmed_word):
                         training_word = self.training_model['words'].get(trimmed_word)
                         if training_word:
                             word_score = log(training_word['probabilities'][category], LOG_BASE)
                             self.testing_model[title]['probabilities'][category] += word_score
+                    else:
+                        self.removed = self.removed.union([trimmed_word])
+                self.testing_model[title]['probabilities'][category] += cat_scores[category]
+
 
     def test(self, year=2019):
-        """Testing."""
+        """Runs all functions needed to obtain the testing model."""
         self.testing_data = self.filter_year(year)
         self.calc_scores()
         self.calc_highest_cat()
@@ -107,15 +124,19 @@ class Model:
         """Get categories for whole data set."""
         return self.data['Post Type'].unique()
 
+
     def filter_year(self, year):
+        """Returns a dataframe whose series are only of a certain year."""
         return self.data[self.data.year == year]
 
 
     def words_in_title(self, title):
+        """Separates post titles by words."""
         return findall(r"([\w'-]+)", title)
 
 
     def calc_highest_cat(self):
+        """Calculates the highest category of the post. This becomes the guess."""
         for post_title, obj_post in self.testing_model.items():
             for category, probability in obj_post['probabilities'].items():
                 check = obj_post.get('guess')
@@ -123,9 +144,16 @@ class Model:
                     self.testing_model[post_title]['guess'] = (category, probability)
 
 
-    def export_vocabulary(self, filename='vocabulary.txt') -> None:
+    def export_vocabulary(self, filename='vocabulary.txt'):
+        """Exports the vocabulary of a file."""
         with open('output/' + filename, 'w+', encoding='utf-8') as f:
             for word in self.training_model['words']:
+                f.write(word + "\n")
+
+    def export_removed(self, filename='removed.txt'):
+        """Exports the removed words to a file."""
+        with open('output/' + filename, 'w+', encoding='utf-8') as f:
+            for word in self.removed:
                 f.write(word + "\n")
 
 
@@ -159,6 +187,7 @@ class Model:
 
 
     def export_testing_model(self, filename='baseline-result.txt'):
+        """Exports the testing model."""
         with open('output/' + filename, 'w+', encoding='utf-8') as f:
             i = 0
             for post_title, obj_post in self.testing_model.items():
@@ -174,22 +203,30 @@ class Model:
                 f.write(line)
                 i += 1
 
+
     def remove_where(self, bound):
+        """Removes words with certain frequencies."""
         if bound == 1:
             bad_words = { key for key, obj_wo in self.training_model['words'].items() if obj_wo['frequencies']['total'] == 1 }
         else:
             bad_words = { key for key, obj_wo in self.training_model['words'].items() if obj_wo['frequencies']['total'] <= bound }
         for bad_word in bad_words:
             del self.training_model['words'][bad_word]
+            self.removed = self.removed.union([bad_word])
+
 
     def remove_top(self, percentage):
+        """Removes words which have frequencies in the top percentage."""
         i_bound = round(len(self.training_model['words']) * percentage)
         by_total_freq = sorted(self.training_model['words'].items(), reverse=True, key=lambda word: word[1]['frequencies']['total'])
         words_removed = by_total_freq[:i_bound-1]
         for to_be_removed in words_removed:
             del self.training_model['words'][to_be_removed[0]]
+            self.removed = self.removed.union([to_be_removed[0]])
+
 
     def calc_performance(self):
+        """Calculates the performance of the model."""
         A, B = 0, 0
         for post in self.testing_model.values():
             if post['answer'] == post['guess'][0]:
