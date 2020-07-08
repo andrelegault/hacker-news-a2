@@ -8,6 +8,7 @@ import w_filter
 from re import findall
 from math import log
 from typing import Dict, Any
+from nltk.tokenize import word_tokenize
 
 
 SMOOTH_VALUE = 0.5
@@ -137,7 +138,7 @@ class Model:
 
     def words_in_title(self, title):
         """Separates post titles by words."""
-        return findall(r"([\w'-]+)", title)
+        return word_tokenize(title)
 
 
     def calc_highest_cat(self):
